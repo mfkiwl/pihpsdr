@@ -17,4 +17,12 @@
 *
 */
 
+#ifndef _OLD_DISCOVERY_H
+#define _OLD_DISCOVERY_H
+
 void old_discovery(void);
+#ifdef STEMLAB_DISCOVERY
+int  stemlab_get_info(int id);
+#endif
+
+#endif

@@ -17,6 +17,9 @@
 *
 */
 
+#ifndef _CHANNEL_H
+#define _CHANNEL_H
+
 #define CHANNEL_RX0 0
 #define CHANNEL_RX1 1
 #define CHANNEL_RX2 2
@@ -28,4 +31,7 @@
 #define CHANNEL_TX 8
 #define CHANNEL_BS 9
 #define CHANNEL_SUBRX 10
+#define CHANNEL_AUDIO 11
+
+#endif
 

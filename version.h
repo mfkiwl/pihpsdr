@@ -17,6 +17,11 @@
 *
 */
 
-extern char build_date[];
-extern char build_time[];
+#ifndef _VERSION_H
+#define _VERSION_H
 
+extern char build_version[];
+extern char build_date[];
+extern char version[];
+
+#endif

@@ -37,9 +37,9 @@
 #include <math.h>
 #include <errno.h>
 
+#include <gtk/gtk.h>
 
 #include "discovered.h"
-#include "new_protocol.h"
 #include "new_protocol.h"
 
 static long sequence;
@@ -97,7 +97,7 @@ void new_protocol_programmer(char *filename ) {
     // read the file in
     int r;
     int b=0;
-    while((r==fread(&source[b],sizeof(char),512, fp))>0) {
+    while((r=fread(&source[b],sizeof(char),512, fp))>0) {
         b+=r;
     }
 
@@ -163,7 +163,6 @@ void programmer_send_block(long block) {
 }
 
 void *programmer_thread(void *arg) {
-
     int result;
     struct timespec ts;
 
@@ -173,7 +172,11 @@ void *programmer_thread(void *arg) {
     // wait for the response to the erase command
     clock_gettime(CLOCK_REALTIME, &ts);
     ts.tv_sec+=120; // wait for 30 seconds
+#ifdef __APPLE__
+    result=sem_trywait(response_sem);
+#else
     result=sem_timedwait(&response_sem,&ts);
+#endif
     if(result==-1) {
         if(errno == ETIMEDOUT) {
             fprintf(stderr,"timedout waiting for response for erase (start)\n");
@@ -191,7 +194,11 @@ void *programmer_thread(void *arg) {
     // wait for the erase to complete
     clock_gettime(CLOCK_REALTIME, &ts);
     ts.tv_sec+=120; // wait for 30 seconds
+#ifdef __APPLE__
+    result=sem_trywait(response_sem);
+#else
     result=sem_timedwait(&response_sem,&ts);
+#endif
     if(result==-1) {
         if(errno == ETIMEDOUT) {
             fprintf(stderr,"timedout waiting for response for erase (complete)\n");
@@ -212,7 +219,11 @@ void *programmer_thread(void *arg) {
         programmer_send_block(b);
         clock_gettime(CLOCK_REALTIME, &ts);
         ts.tv_sec+=5; // wait for 5 seconds
+#ifdef __APPLE__
+        result=sem_trywait(response_sem);
+#else
         result=sem_timedwait(&response_sem,&ts);
+#endif
         if(result==-1) {
             if(errno == ETIMEDOUT) {
                 fprintf(stderr,"timedout waiting for response for sent block\n");
@@ -228,5 +239,6 @@ void *programmer_thread(void *arg) {
         }
         block_sequence++;
     }
-    
+
+    return NULL;    
 }

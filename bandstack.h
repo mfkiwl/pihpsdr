@@ -17,14 +17,15 @@
 *
 */
 
-#ifndef BANDSTACK_H
-#define BANDSTACK_H
+#ifndef _BANDSTACK_H
+#define _BANDSTACK_H
+
 /* --------------------------------------------------------------------------*/
 /**
 * @brief Bandstack definition
 */
 struct _BANDSTACK_ENTRY {
-    long long frequencyA;
+    long long frequency;
     int mode;
     int filter;
     int var1Low;

@@ -17,6 +17,11 @@
 *
 */
 
+#ifndef _PROPERTY_H
+#define _PROPERTY_H
+
+#define PROPERTY_VERSION 3.0
+
 typedef struct _PROPERTY PROPERTY;
 
 /* --------------------------------------------------------------------------*/
@@ -29,7 +34,10 @@ struct _PROPERTY {
     PROPERTY* next_property;
 };
 
-void loadProperties(char* filename);
-char* getProperty(char* name);
-void setProperty(char* name,char* value);
+extern void clearProperties();
+extern void loadProperties(char* filename);
+extern char* getProperty(char* name);
+extern void setProperty(char* name,char* value);
+extern void saveProperties(char* filename);
 
+#endif

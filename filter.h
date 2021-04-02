@@ -17,10 +17,12 @@
 *
 */
 
+#ifndef _FILTER_H
+#define _FILTER_H
+
 #include "mode.h"
 
-// disable Var1 and Var2 (change to 12 to enable)
-#define FILTERS 10
+#define FILTERS 12
 
 #define CW_PITCH 600
 
@@ -45,19 +47,20 @@ typedef struct _FILTER FILTER;
 #define filterVar1 10
 #define filterVar2 11
 
-int filter;
+extern int filter;
 
-int filterLow;
-int filterHigh;
+extern int filterLow;
+extern int filterHigh;
 
-int txFilterLowCut;
-int txFilterHighCut;
+extern int txFilterLowCut;
+extern int txFilterHighCut;
 
-int filterVar1Low;
-int filterVar1High;
-int filterVar2Low;
-int filterVar2High;
+extern FILTER *filters[MODES];
 
+extern gint filter_step;
 
-FILTER *filters[MODES];
-
+extern void filterSaveState();
+extern void filterRestoreState();
+extern void filter_width_changed(int rx,int increment);
+extern void filter_shift_changed(int rx,int increment);
+#endif

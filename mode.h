@@ -17,6 +17,9 @@
 *
 */
 
+#ifndef _MODE_H
+#define _MODE_H
+
 #define modeLSB 0
 #define modeUSB 1
 #define modeDSB 2
@@ -29,14 +32,8 @@
 #define modeDIGL 9
 #define modeSAM 10
 #define modeDRM 11
-#ifdef FREEDV
-#define modeFREEDV 12
-#define MODES 13
-#else
 #define MODES 12
+
+extern char *mode_string[MODES];
+
 #endif
-
-int mode;
-
-char *mode_string[MODES];
-

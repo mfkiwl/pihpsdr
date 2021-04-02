@@ -30,8 +30,5 @@ char *mode_string[]={
   ,"DIGL"
   ,"SAM"
   ,"DRM"
-#ifdef FREEDV
-  ,"FREEDV"
-#endif
 };
 

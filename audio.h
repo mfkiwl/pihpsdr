@@ -17,8 +17,33 @@
 *
 */
 
-extern int audio;
-extern int audio_buffer_size;
+#ifndef _AUDIO_H
+#define _AUDIO_H
 
-void audio_init();
-void audio_write(double *buffer,int samples);
+#include "receiver.h"
+
+#define MAX_AUDIO_DEVICES 64
+
+#define AUDIO_BUFFER_SIZE 480
+
+typedef struct _audio_devices {
+  char *name;
+  int index;
+  char *description;
+} AUDIO_DEVICE;
+
+extern int n_input_devices;
+extern AUDIO_DEVICE input_devices[MAX_AUDIO_DEVICES];
+extern int n_output_devices;
+extern AUDIO_DEVICE output_devices[MAX_AUDIO_DEVICES];
+
+extern int audio_open_input();
+extern void audio_close_input();
+extern int audio_open_output(RECEIVER *rx);
+extern void audio_close_output(RECEIVER *rx);
+extern int audio_write(RECEIVER *rx,float left_sample,float right_sample);
+extern int cw_audio_write(float sample);
+extern void audio_get_cards();
+char * audio_get_error_string(int err);
+float  audio_get_next_mic_sample();
+#endif

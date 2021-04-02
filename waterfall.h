@@ -17,6 +17,10 @@
 *
 */
 
+#ifndef _WATERFALL_H
+#define _WATERFALL_H
 
-void waterfall_update(float *data);
-GtkWidget* waterfall_init(int width,int height);
+extern void waterfall_update(RECEIVER *rx);
+extern void waterfall_init(RECEIVER *rx,int width,int height);
+
+#endif

@@ -17,6 +17,7 @@
 *
 */
 
+#include <gtk/gtk.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/types.h>
@@ -29,7 +30,6 @@
 #include <net/if.h>
 #include <netinet/in.h>
 #include <ifaddrs.h>
-#include <pthread.h>
 #include <string.h>
 #include <errno.h>
 
@@ -48,8 +48,8 @@ static struct sockaddr_in discovery_addr;
 
 void new_discover(struct ifaddrs* iface);
 
-static pthread_t discover_thread_id;
-void* new_discover_receive_thread(void* arg);
+static GThread *discover_thread_id;
+gpointer new_discover_receive_thread(gpointer data);
 
 void print_device(int i) {
     fprintf(stderr,"discovery: found protocol=%d device=%d software_version=%d status=%d address=%s (%02X:%02X:%02X:%02X:%02X:%02X) on %s\n", 
@@ -73,12 +73,12 @@ void new_discovery() {
     ifa = addrs;
     while (ifa) {
         g_main_context_iteration(NULL, 0);
-        if (ifa->ifa_addr && ifa->ifa_addr->sa_family == AF_INET) {
-            if((ifa->ifa_flags&IFF_UP)==IFF_UP
-                && (ifa->ifa_flags&IFF_RUNNING)==IFF_RUNNING
-                && (ifa->ifa_flags&IFF_LOOPBACK)!=IFF_LOOPBACK) {
-                new_discover(ifa);
-            }
+        if (ifa->ifa_addr) {
+          if(ifa->ifa_addr->sa_family == AF_INET &&
+            (ifa->ifa_flags&IFF_UP)==IFF_UP &&
+            (ifa->ifa_flags&IFF_RUNNING)==IFF_RUNNING) {
+		new_discover(ifa);
+          }
         }
         ifa = ifa->ifa_next;
     }
@@ -112,6 +112,7 @@ void new_discover(struct ifaddrs* iface) {
 
     int optval = 1;
     setsockopt(discovery_socket, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
+    setsockopt(discovery_socket, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
 
     sa = (struct sockaddr_in *) iface->ifa_addr;
     mask = (struct sockaddr_in *) iface->ifa_netmask;
@@ -121,7 +122,7 @@ void new_discover(struct ifaddrs* iface) {
     // bind to this interface and the discovery port
     interface_addr.sin_family = AF_INET;
     interface_addr.sin_addr.s_addr = sa->sin_addr.s_addr;
-    interface_addr.sin_port = htons(DISCOVERY_PORT);
+    interface_addr.sin_port = htons(0);
     if(bind(discovery_socket,(struct sockaddr*)&interface_addr,sizeof(interface_addr))<0) {
         perror("new_discover: bind socket failed for discovery_socket\n");
         exit(-1);
@@ -147,11 +148,14 @@ void new_discover(struct ifaddrs* iface) {
     to_addr.sin_addr.s_addr=htonl(INADDR_BROADCAST);
 
     // start a receive thread to collect discovery response packets
-    rc=pthread_create(&discover_thread_id,NULL,new_discover_receive_thread,NULL);
-    if(rc != 0) {
-        fprintf(stderr,"pthread_create failed on new_discover_receive_thread: rc=%d\n", rc);
-        exit(-1);
+    discover_thread_id = g_thread_new( "new discover receive", new_discover_receive_thread, NULL);
+    if( ! discover_thread_id )
+    {
+        fprintf(stderr,"g_thread_new failed on new_discover_receive_thread\n");
+        exit( -1 );
     }
+    fprintf(stderr,"new_disovery: thread_id=%p\n",discover_thread_id);
+
 
     // send discovery packet
     unsigned char buffer[60];
@@ -167,25 +171,26 @@ void new_discover(struct ifaddrs* iface) {
 
     if(sendto(discovery_socket,buffer,60,0,(struct sockaddr*)&to_addr,sizeof(to_addr))<0) {
         perror("new_discover: sendto socket failed for discovery_socket\n");
-        exit(-1);
+        return;
     }
 
     // wait for receive thread to complete
-    void* status;
-    pthread_join(discover_thread_id,&status);
+    g_thread_join(discover_thread_id);
 
     close(discovery_socket);
 
     fprintf(stderr,"new_discover: exiting discover for %s\n",iface->ifa_name);
 }
 
-void* new_discover_receive_thread(void* arg) {
+//void* new_discover_receive_thread(void* arg) {
+gpointer new_discover_receive_thread(gpointer data) {
     struct sockaddr_in addr;
-    int len;
+    socklen_t len;
     unsigned char buffer[2048];
     int bytes_read;
     struct timeval tv;
     int i;
+    double frequency_min, frequency_max;
 
     tv.tv_sec = 2;
     tv.tv_usec = 0;
@@ -212,44 +217,67 @@ void* new_discover_receive_thread(void* arg) {
                 if(devices<MAX_DEVICES) {
                     discovered[devices].protocol=NEW_PROTOCOL;
                     discovered[devices].device=buffer[11]&0xFF;
+                    discovered[devices].software_version=buffer[13]&0xFF;
+                    discovered[devices].status=status;
                     switch(discovered[devices].device) {
 			case NEW_DEVICE_ATLAS:
                             strcpy(discovered[devices].name,"Atlas");
+                            frequency_min=0.0;
+                            frequency_max=61440000.0;
                             break;
 			case NEW_DEVICE_HERMES:
                             strcpy(discovered[devices].name,"Hermes");
+                            frequency_min=0.0;
+                            frequency_max=61440000.0;
                             break;
 			case NEW_DEVICE_HERMES2:
                             strcpy(discovered[devices].name,"Hermes2");
+                            frequency_min=0.0;
+                            frequency_max=61440000.0;
                             break;
 			case NEW_DEVICE_ANGELIA:
                             strcpy(discovered[devices].name,"Angelia");
+                            frequency_min=0.0;
+                            frequency_max=61440000.0;
                             break;
 			case NEW_DEVICE_ORION:
                             strcpy(discovered[devices].name,"Orion");
+                            frequency_min=0.0;
+                            frequency_max=61440000.0;
                             break;
 			case NEW_DEVICE_ORION2:
                             strcpy(discovered[devices].name,"Orion2");
+                            frequency_min=0.0;
+                            frequency_max=61440000.0;
                             break;
 			case NEW_DEVICE_HERMES_LITE:
-                            strcpy(discovered[devices].name,"Hermes Lite");
+			    if (discovered[devices].software_version < 40) {
+                              strcpy(discovered[devices].name,"Hermes Lite V1");
+			    } else {
+                              strcpy(discovered[devices].name,"Hermes Lite V2");
+			      discovered[devices].device = NEW_DEVICE_HERMES_LITE2;
+			    }
+                            frequency_min=0.0;
+                            frequency_max=30720000.0;
                             break;
                         default:
                             strcpy(discovered[devices].name,"Unknown");
+                            frequency_min=0.0;
+                            frequency_max=30720000.0;
                             break;
                     }
-                    discovered[devices].software_version=buffer[13]&0xFF;
                     for(i=0;i<6;i++) {
                         discovered[devices].info.network.mac_address[i]=buffer[i+5];
                     }
-                    discovered[devices].status=status;
                     memcpy((void*)&discovered[devices].info.network.address,(void*)&addr,sizeof(addr));
                     discovered[devices].info.network.address_length=sizeof(addr);
                     memcpy((void*)&discovered[devices].info.network.interface_address,(void*)&interface_addr,sizeof(interface_addr));
                     memcpy((void*)&discovered[devices].info.network.interface_netmask,(void*)&interface_netmask,sizeof(interface_netmask));
                     discovered[devices].info.network.interface_length=sizeof(interface_addr);
                     strcpy(discovered[devices].info.network.interface_name,interface_name);
-                    fprintf(stderr,"new_discover: found protocol=%d device=%d software_version=%d status=%d address=%s (%02X:%02X:%02X:%02X:%02X:%02X) on %s\n", 
+                    discovered[devices].supported_receivers=2;
+                    fprintf(stderr,"new_discover: found %d protocol=%d device=%d software_version=%d status=%d address=%s (%02X:%02X:%02X:%02X:%02X:%02X) on %s\n", 
+                            devices,
                             discovered[devices].protocol,
                             discovered[devices].device,
                             discovered[devices].software_version,
@@ -262,6 +290,8 @@ void* new_discover_receive_thread(void* arg) {
                             discovered[devices].info.network.mac_address[4],
                             discovered[devices].info.network.mac_address[5],
                             discovered[devices].info.network.interface_name);
+                            discovered[devices].frequency_min=frequency_min;
+                            discovered[devices].frequency_max=frequency_max;
                     devices++;
                 }
             }
@@ -269,5 +299,6 @@ void* new_discover_receive_thread(void* arg) {
         }
     }
     fprintf(stderr,"new_discover: exiting new_discover_receive_thread\n");
-    pthread_exit(NULL);
+    g_thread_exit(NULL);
+    return NULL;
 }

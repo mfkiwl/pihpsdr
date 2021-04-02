@@ -17,63 +17,257 @@
 *
 */
 
-#ifdef raspberrypi
-#define INCLUDE_GPIO
-#endif
-#ifdef odroid
-#define INCLUDE_GPIO
-#endif
+#ifndef _GPIO_H
+#define _GPIO_H
 
-#ifdef INCLUDE_GPIO
+enum {
+  NO_CONTROLLER=0,
+  CONTROLLER1,
+  CONTROLLER2_V1,
+  CONTROLLER2_V2,
+};
+
+extern int controller;
+  
+enum {
+  ENCODER_NO_ACTION=0,
+  ENCODER_AF_GAIN,
+  ENCODER_AF_GAIN_RX1,
+  ENCODER_AF_GAIN_RX2,
+  ENCODER_AGC_GAIN,
+  ENCODER_AGC_GAIN_RX1,
+  ENCODER_AGC_GAIN_RX2,
+  ENCODER_ATTENUATION,
+  ENCODER_COMP,
+  ENCODER_CW_FREQUENCY,
+  ENCODER_CW_SPEED,
+  ENCODER_DIVERSITY_GAIN,
+  ENCODER_DIVERSITY_GAIN_COARSE,
+  ENCODER_DIVERSITY_GAIN_FINE,
+  ENCODER_DIVERSITY_PHASE,
+  ENCODER_DIVERSITY_PHASE_COARSE,
+  ENCODER_DIVERSITY_PHASE_FINE,
+  ENCODER_DRIVE,
+  ENCODER_IF_SHIFT,
+  ENCODER_IF_SHIFT_RX1,
+  ENCODER_IF_SHIFT_RX2,
+  ENCODER_IF_WIDTH,
+  ENCODER_IF_WIDTH_RX1,
+  ENCODER_IF_WIDTH_RX2,
+  ENCODER_MIC_GAIN,
+  ENCODER_PAN,
+  ENCODER_PANADAPTER_HIGH,
+  ENCODER_PANADAPTER_LOW,
+  ENCODER_PANADAPTER_STEP,
+  ENCODER_RF_GAIN,
+  ENCODER_RF_GAIN_RX1,
+  ENCODER_RF_GAIN_RX2,
+  ENCODER_RIT,
+  ENCODER_RIT_RX1,
+  ENCODER_RIT_RX2,
+  ENCODER_SQUELCH,
+  ENCODER_SQUELCH_RX1,
+  ENCODER_SQUELCH_RX2,
+  ENCODER_TUNE_DRIVE,
+  ENCODER_WATERFALL_HIGH,
+  ENCODER_WATERFALL_LOW,
+  ENCODER_XIT,
+  ENCODER_ZOOM,
+  ENCODER_ACTIONS
+};
+
+extern char *encoder_string[ENCODER_ACTIONS];
+
+enum {
+  NO_ACTION=0,
+  A_TO_B,
+  A_SWAP_B,
+  AGC,
+  ANF,
+  B_TO_A,
+  BAND_MINUS,
+  BAND_PLUS,
+  BANDSTACK_MINUS,
+  BANDSTACK_PLUS,
+  CTUN,
+  DIVERSITY,
+  FILTER_MINUS,
+  FILTER_PLUS,
+  FUNCTION,
+  LOCK,
+  MENU_BAND,
+  MENU_BANDSTACK,
+  MENU_DIVERSITY,
+  MENU_FILTER,
+  MENU_FREQUENCY,
+  MENU_MEMORY,
+  MENU_MODE,
+  MENU_PS,
+  MODE_MINUS,
+  MODE_PLUS,
+  MOX,
+  MUTE,
+  NB,
+  NR,
+  PAN_MINUS,
+  PAN_PLUS,
+  PS,
+  RIT,
+  RIT_CLEAR,
+  SAT,
+  SNB,
+  SPLIT,
+  TUNE,
+  TWO_TONE,
+  XIT,
+  XIT_CLEAR,
+  ZOOM_MINUS,
+  ZOOM_PLUS,
+  SWITCH_ACTIONS
+};
+
+extern char *sw_string[SWITCH_ACTIONS];
+
+
+enum {
+  CONTROLLER1_SW1=0,
+  CONTROLLER1_SW2,
+  CONTROLLER1_SW3,
+  CONTROLLER1_SW4,
+  CONTROLLER1_SW5,
+  CONTROLLER1_SW6,
+  CONTROLLER1_SW7,
+  CONTROLLER1_SW8,
+  CONTROLLER1_SWITCHES
+};
+
+enum {
+  CONTROLLER2_SW2=0,
+  CONTROLLER2_SW3,
+  CONTROLLER2_SW4,
+  CONTROLLER2_SW5,
+  CONTROLLER2_SW6,
+  CONTROLLER2_SW7,
+  CONTROLLER2_SW8,
+  CONTROLLER2_SW9,
+  CONTROLLER2_SW10,
+  CONTROLLER2_SW11,
+  CONTROLLER2_SW12,
+  CONTROLLER2_SW13,
+  CONTROLLER2_SW14,
+  CONTROLLER2_SW15,
+  CONTROLLER2_SW16,
+  CONTROLLER2_SW17,
+  CONTROLLER2_SWITCHES
+};
+
+extern int *sw_action;
+
+extern int settle_time;
+
+
+extern int e2_encoder_action;
+extern int e3_encoder_action;
+extern int e4_encoder_action;
+extern int e5_encoder_action;
+
+extern int e2_top_encoder_action;
+extern int e3_top_encoder_action;
+extern int e4_top_encoder_action;
+extern int e5_top_encoder_action;
+
+extern int e2_sw_action;
+extern int e3_sw_action;
+extern int e4_sw_action;
+extern int e5_sw_action;
+
+// uses wiringpi pin numbers
 extern int ENABLE_VFO_ENCODER;
 extern int ENABLE_VFO_PULLUP;
 extern int VFO_ENCODER_A;
 extern int VFO_ENCODER_B;
-extern int VFO_ENCODER_A_PIN;
-extern int VFO_ENCODER_B_PIN;
-extern int ENABLE_AF_ENCODER;
-extern int ENABLE_AF_PULLUP;
-extern int AF_ENCODER_A;
-extern int AF_ENCODER_B;
-extern int ENABLE_RF_ENCODER;
-extern int ENABLE_RF_PULLUP;
-extern int RF_ENCODER_A;
-extern int RF_ENCODER_B;
-extern int ENABLE_AGC_ENCODER;
-extern int ENABLE_AGC_PULLUP;
-extern int AGC_ENCODER_A;
-extern int AGC_ENCODER_B;
-extern int ENABLE_BAND_BUTTON;
-extern int BAND_BUTTON;
-extern int ENABLE_BANDSTACK_BUTTON;
-extern int BANDSTACK_BUTTON;
-extern int ENABLE_MODE_BUTTON;
-extern int MODE_BUTTON;
-extern int ENABLE_FILTER_BUTTON;
-extern int FILTER_BUTTON;
-extern int ENABLE_NOISE_BUTTON;
-extern int NOISE_BUTTON;
-extern int ENABLE_AGC_BUTTON;
-extern int AGC_BUTTON;
+extern int ENABLE_E2_ENCODER;
+extern int ENABLE_E2_PULLUP;
+extern int E2_ENCODER_A;
+extern int E2_ENCODER_B;
+extern int E2_TOP_ENCODER_A;
+extern int E2_TOP_ENCODER_B;
+extern int E2_FUNCTION;
+extern int ENABLE_E3_ENCODER;
+extern int ENABLE_E3_PULLUP;
+extern int E3_ENCODER_A;
+extern int E3_ENCODER_B;
+extern int E3_TOP_ENCODER_A;
+extern int E3_TOP_ENCODER_B;
+extern int E3_FUNCTION;
+extern int ENABLE_E4_ENCODER;
+extern int ENABLE_E4_PULLUP;
+extern int E4_ENCODER_A;
+extern int E4_ENCODER_B;
+extern int E4_TOP_ENCODER_A;
+extern int E4_TOP_ENCODER_B;
+extern int E4_FUNCTION;
+extern int ENABLE_E5_ENCODER;
+extern int ENABLE_E5_PULLUP;
+extern int E5_ENCODER_A;
+extern int E5_ENCODER_B;
+extern int E5_TOP_ENCODER_A;
+extern int E5_TOP_ENCODER_B;
+extern int E5_FUNCTION;
+
+extern int ENABLE_S1_BUTTON;
+extern int S1_BUTTON;
+extern int ENABLE_S2_BUTTON;
+extern int S2_BUTTON;
+extern int ENABLE_S3_BUTTON;
+extern int S3_BUTTON;
+extern int ENABLE_S4_BUTTON;
+extern int S4_BUTTON;
+extern int ENABLE_S5_BUTTON;
+extern int S5_BUTTON;
+extern int ENABLE_S6_BUTTON;
+extern int S6_BUTTON;
+
 extern int ENABLE_MOX_BUTTON;
 extern int MOX_BUTTON;
 extern int ENABLE_FUNCTION_BUTTON;
 extern int FUNCTION_BUTTON;
+#ifdef LOCALCW
+extern int CWL_BUTTON;
+extern int CWR_BUTTON;
+extern int SIDETONE_GPIO;
+extern int ENABLE_GPIO_SIDETONE;
+extern int ENABLE_CW_BUTTONS;
+extern int CW_ACTIVE_LOW;
+extern void gpio_cw_sidetone_set(int level);
+extern int  gpio_left_cw_key();
+extern int  gpio_right_cw_key();
+extern int  gpio_cw_sidetone_enabled();
+#endif
 
-void gpio_restore_state();
-void gpio_save_state();
-int gpio_init();
-void gpio_close();
-int vfo_encoder_get_pos();
-int af_encoder_get_pos();
-int af_function_get_state();
-int rf_encoder_get_pos();
-int rf_function_get_state();
-int function_get_state();
-int band_get_state();
-int mode_get_state();
-int filter_get_state();
-int noise_get_state();
-int mox_get_state();
+#ifdef PTT
+extern int ENABLE_PTT_GPIO;
+extern int PTT_GPIO;
+extern int PTT_ACTIVE_LOW;
+#endif
+
+extern void gpio_set_defaults(int ctrlr);
+extern void gpio_restore_actions();
+extern void gpio_restore_state();
+extern void gpio_save_state();
+extern void gpio_save_actions();
+extern int gpio_init();
+extern void gpio_close();
+extern int vfo_encoder_get_pos();
+extern int af_encoder_get_pos();
+extern int af_function_get_state();
+extern int rf_encoder_get_pos();
+extern int rf_function_get_state();
+extern int function_get_state();
+extern int band_get_state();
+extern int mode_get_state();
+extern int filter_get_state();
+extern int noise_get_state();
+extern int mox_get_state();
 
 #endif

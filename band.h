@@ -17,50 +17,43 @@
 *
 */
 
+#ifndef _BAND_H
+#define _BAND_H
+
 #include <gtk/gtk.h>
 #include "bandstack.h"
 
-#define band160 0
-#define band80 1
-#define band60 2
-#define band40 3
-#define band30 4
-#define band20 5
-#define band17 6
-#define band15 7
-#define band12 8
-#define band10 9
-#define band6 10
-#ifdef LIMESDR
-#define band70 11
-#define band220 13
-#define band430 14
-#define band902 15
-#define band1240 16
-#define band2300 17
-#define band3400 18
-#define bandAIR 19
-#define bandGen 20
-#define bandWWV 21
-#define BANDS 22
-#define HAM_BANDS 19
-#else
-#define bandGen 11
-#define bandWWV 12
-#define BANDS 13
-#define HAM_BANDS 11
+enum {
+  band136=0,
+  band472,
+  band160,
+  band80,
+  band60,
+  band40,
+  band30,
+  band20,
+  band17,
+  band15,
+  band12,
+  band10,
+  band6,
+#ifdef SOAPYSDR
+  band70,
+  band144,
+  band220,
+  band430,
+  band902,
+  band1240,
+  band2300,
+  band3400,
+  bandAIR,
 #endif
-
-/* --------------------------------------------------------------------------*/
-/**
-* @brief Bandlimit definition
-*/
-struct _BAND_LIMITS {
-    long long minFrequency;
-    long long maxFrequency;
+  bandWWV,
+  bandGen,
+  BANDS
 };
 
-typedef struct _BAND_LIMITS BAND_LIMITS;
+#define XVTRS 8
 
 /* --------------------------------------------------------------------------*/
 /**
@@ -75,27 +68,61 @@ struct _BAND {
     int alexRxAntenna;
     int alexTxAntenna;
     int alexAttenuation;
-    int pa_calibration;
+    double pa_calibration;
+    long long frequencyMin;
+    long long frequencyMax;
+    long long frequencyLO;
+    long long errorLO;
+    int disablePA;
 };
 
 typedef struct _BAND BAND;
 
-int band;
-int xvtr_band;
-gboolean displayHF;
+struct _CHANNEL {
+    long long frequency;
+    long long width;
+};
 
-int band_get_current();
-BAND *band_get_current_band();
-BAND *band_get_band(int b);
-BAND *band_set_current(int b);
+typedef struct _CHANNEL CHANNEL;
 
-BANDSTACK_ENTRY *bandstack_entry_next();
-BANDSTACK_ENTRY *bandstack_entry_previous();
-BANDSTACK_ENTRY *bandstack_entry_get_current();
 
-BAND_LIMITS* getBandLimits(long long minDisplay,long long maxDisplay);
 
-/*
-XVTR_ENTRY* getXvtrEntry(int i);
-*/
+extern int band;
+extern gboolean displayHF;
 
+#define UK_CHANNEL_ENTRIES 11
+#define OTHER_CHANNEL_ENTRIES 5
+#define WRC15_CHANNEL_ENTRIES 1
+
+extern int channel_entries;
+extern CHANNEL *band_channels_60m;
+
+extern CHANNEL band_channels_60m_UK[UK_CHANNEL_ENTRIES];
+extern CHANNEL band_channels_60m_OTHER[OTHER_CHANNEL_ENTRIES];
+extern CHANNEL band_channels_60m_WRC15[WRC15_CHANNEL_ENTRIES];
+
+extern BANDSTACK bandstack60;
+extern BANDSTACK_ENTRY bandstack_entries60_OTHER[];
+extern BANDSTACK_ENTRY bandstack_entries60_WRC15[];
+extern BANDSTACK_ENTRY bandstack_entries60_UK[];
+
+extern int band_get_current();
+extern BAND *band_get_current_band();
+extern BAND *band_get_band(int b);
+extern BAND *band_set_current(int b);
+extern int get_band_from_frequency(long long f);
+
+extern BANDSTACK *bandstack_get_bandstack(int band);
+extern BANDSTACK_ENTRY *bandstack_get_bandstack_entry(int band,int entry);
+
+extern BANDSTACK_ENTRY *bandstack_entry_next();
+extern BANDSTACK_ENTRY *bandstack_entry_previous();
+extern BANDSTACK_ENTRY *bandstack_entry_get_current();
+
+extern void bandSaveState();
+extern void bandRestoreState();
+
+char* getFrequencyInfo(long long frequency,int filter_low,int filter_high);
+int canTransmit();
+
+#endif

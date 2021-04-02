@@ -17,12 +17,29 @@
 *
 */
 
+#include <gtk/gtk.h>
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include "property.h"
 
-PROPERTY* properties;
+PROPERTY* properties=NULL;
+
+static double version=0.0;
+
+void clearProperties() {
+g_print("clearProperties\n");
+  if(properties!=NULL) {
+    // free all the properties
+    PROPERTY *next;
+    while(properties!=NULL) {
+      next=properties->next_property;
+      free(properties);
+      properties=next;
+    }
+  }
+}
 
 /* --------------------------------------------------------------------------*/
 /**
@@ -35,26 +52,36 @@ void loadProperties(char* filename) {
     char* name;
     char* value;
     FILE* f=fopen(filename,"r");
-    properties=NULL;
     PROPERTY* property;
 
     fprintf(stderr,"loadProperties: %s\n",filename);
-    
+    clearProperties();
     if(f) {
         while(fgets(string,sizeof(string),f)) {
             if(string[0]!='#') {
                 name=strtok(string,"=");
                 value=strtok(NULL,"\n");
-                property=malloc(sizeof(PROPERTY));
-                property->name=malloc(strlen(name)+1);
-                strcpy(property->name,name);
-                property->value=malloc(strlen(value)+1);
-                strcpy(property->value,value);
-                property->next_property=properties;
-                properties=property;
+		// Beware of "illegal" lines in corrupted files
+		if (name != NULL && value != NULL) {
+                  property=malloc(sizeof(PROPERTY));
+                  property->name=malloc(strlen(name)+1);
+                  strcpy(property->name,name);
+                  property->value=malloc(strlen(value)+1);
+                  strcpy(property->value,value);
+                  property->next_property=properties;
+                  properties=property;
+                  if(strcmp(name,"property_version")==0) {
+                    version=atof(value);
+                  }
+		}
             }
         }
         fclose(f);
+    }
+
+    if(version!=PROPERTY_VERSION) {
+      properties=NULL;
+      fprintf(stderr,"loadProperties: version=%f expected version=%f ignoring\n",version,PROPERTY_VERSION);
     }
 }
 
@@ -65,13 +92,20 @@ void loadProperties(char* filename) {
 * @param filename
 */
 void saveProperties(char* filename) {
-    PROPERTY* property=properties;
+    PROPERTY* property;
     FILE* f=fopen(filename,"w+");
     char line[512];
+
+    fprintf(stderr,"saveProperties: %s\n",filename);
+
     if(!f) {
         fprintf(stderr,"can't open %s\n",filename);
-        exit(1);
+        return;
     }
+
+    sprintf(line,"%0.2f",PROPERTY_VERSION);
+    setProperty("property_version",line);
+    property=properties;
     while(property) {
         sprintf(line,"%s=%s\n",property->name,property->value);
         fwrite(line,1,strlen(line),f);
