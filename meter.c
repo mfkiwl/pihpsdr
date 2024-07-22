@@ -24,6 +24,7 @@
 #include <unistd.h>
 #include <math.h>
 
+#include "band.h"
 #include "receiver.h"
 #include "meter.h"
 #include "radio.h"
@@ -150,36 +151,43 @@ void meter_update(RECEIVER *rx,int meter_type,double value,double reverse,double
   char *units="W";
   double interval=10.0;
   cairo_t *cr = cairo_create (meter_surface);
+  BAND *band=band_get_current_band();
 
   if(meter_type==POWER) {
     level=value;
-    if(level==0.0) {
+    if(level==0.0 || band->disablePA || !pa_enabled) {
       level=exciter;
     }
-    switch(pa_power) {
-      case PA_1W:
-        units="mW";
-        interval=100.0;
-        level=level*1000.0;
-        break;
-      case PA_10W:
-        interval=1.0;
-        break;
-      case PA_30W:
-        interval=3.0;
-        break;
-      case PA_50W:
-        interval=5.0;
-        break;
-      case PA_100W:
-        interval=10.0;
-        break;
-      case PA_200W:
-        interval=20.0;
-        break;
-      case PA_500W:
-        interval=50.0;
-        break;
+    if(band->disablePA || !pa_enabled) {
+      units="mW";
+      interval=100.0;
+      level=level*1000.0;
+    } else {
+      switch(pa_power) {
+        case PA_1W:
+          units="mW";
+          interval=100.0;
+          level=level*1000.0;
+          break;
+        case PA_10W:
+          interval=1.0;
+          break;
+        case PA_30W:
+          interval=3.0;
+          break;
+        case PA_50W:
+          interval=5.0;
+          break;
+        case PA_100W:
+          interval=10.0;
+          break;
+        case PA_200W:
+          interval=20.0;
+          break;
+        case PA_500W:
+          interval=50.0;
+          break;
+      }
     }
   }
 
@@ -187,19 +195,20 @@ if(analog_meter) {
   cairo_set_source_rgb (cr, 0.0, 0.0, 0.0);
   cairo_paint (cr);
 
-  cairo_set_font_size(cr, 12);
+  cairo_set_font_size(cr, DISPLAY_FONT_SIZE2);
 
   switch(meter_type) {
     case SMETER:
       {
       if(have_rx_gain) {
-        level=value+rx_gain_calibration-adc_attenuation[rx->adc];
+        level=value+rx_gain_calibration-adc[rx->adc].attenuation;
       } else {
-        level=value+(double)adc_attenuation[rx->adc];
+        level=value+(double)adc[rx->adc].attenuation;
       }
 #ifdef SOAPYSDR
       if(protocol==SOAPYSDR_PROTOCOL) {
-       level-=rx->rf_gain;
+        //level-=rx->rf_gain;
+        level-=adc[rx->id].gain;
       }
 #endif
       if (filter_board == CHARLY25) {
@@ -333,29 +342,35 @@ if(analog_meter) {
 
       char *units="W";
       double interval=10.0;
-      switch(pa_power) {
-        case PA_1W:
-          units="mW";
-          interval=100.0;
-          break;
-        case PA_10W:
-          interval=1.0;
-          break;
-        case PA_30W:
-          interval=3.0;
-          break;
-        case PA_50W:
-          interval=5.0;
-          break;
-        case PA_100W:
-          interval=10.0;
-          break;
-        case PA_200W:
-          interval=20.0;
-          break;
-        case PA_500W:
-          interval=50.0;
-          break;
+
+      if(band->disablePA || !pa_enabled) {
+        units="mW";
+        interval=100.0;
+      } else {
+        switch(pa_power) {
+          case PA_1W:
+            units="mW";
+            interval=100.0;
+            break;
+          case PA_10W:
+            interval=1.0;
+            break;
+          case PA_30W:
+            interval=3.0;
+            break;
+          case PA_50W:
+            interval=5.0;
+            break;
+          case PA_100W:
+            interval=10.0;
+            break;
+          case PA_200W:
+            interval=20.0;
+            break;
+          case PA_500W:
+            interval=50.0;
+            break;
+        }
       }
 
       for(i=0;i<=100;i++) {
@@ -439,13 +454,16 @@ if(analog_meter) {
 
 
       cairo_set_source_rgb (cr, 1.0, 1.0, 1.0);
-      sprintf(sf,"%0.1f %s",max_level,units);
+      //sprintf(sf,"%0.1f%s",max_level,units);
+      sprintf(sf,"%d%s",(int)max_level,units);
       cairo_move_to(cr, 80, meter_height-22);
       cairo_show_text(cr, sf);
 
       double swr;
       if (max_level > reverse) {
-        swr=(max_level+reverse)/(max_level-reverse);
+        //swr=(max_level+reverse)/(max_level-reverse);
+	// fix fhanks to JW1TWP
+	swr=(1+sqrt(max_level/reverse))/(1-sqrt(max_level/reverse));
       } else {
         swr=999.9;
       }
@@ -470,10 +488,10 @@ if(analog_meter) {
     cairo_rectangle(cr, offset, 0.0, peak, 5.0);
     cairo_fill(cr);
 
-    cairo_select_font_face(cr, "FreeMono",
+    cairo_select_font_face(cr, DISPLAY_FONT,
                 CAIRO_FONT_SLANT_NORMAL,
                 CAIRO_FONT_WEIGHT_BOLD);
-    cairo_set_font_size(cr, 10);
+    cairo_set_font_size(cr, DISPLAY_FONT_SIZE1);
     cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
     cairo_move_to(cr, 0.0, 8.0);
     cairo_show_text(cr, "Mic Lvl");
@@ -505,10 +523,10 @@ if(analog_meter) {
   cairo_set_source_rgb (cr, 0.0, 0.0, 0.0);
   cairo_paint (cr);
 
-  cairo_select_font_face(cr, "FreeMono",
+  cairo_select_font_face(cr, DISPLAY_FONT,
                 CAIRO_FONT_SLANT_NORMAL,
                 CAIRO_FONT_WEIGHT_BOLD);
-  cairo_set_font_size(cr, 12);
+  cairo_set_font_size(cr, DISPLAY_FONT_SIZE2);
 
   cairo_set_line_width(cr, 1.0);
 
@@ -562,13 +580,14 @@ if(analog_meter) {
       text_location=10;
       offset=5.0;
       if(have_rx_gain) {
-        level=value+rx_gain_calibration-adc_attenuation[rx->adc];
+        level=value+rx_gain_calibration-adc[rx->adc].attenuation;
       } else {
-        level=value+(double)adc_attenuation[rx->adc];
+        level=value+(double)adc[rx->adc].attenuation;
       }
 #ifdef SOAPYSDR
       if(protocol==SOAPYSDR_PROTOCOL) {
-       level-=rx->rf_gain;
+        //level-=rx->rf_gain;
+        level-=adc[rx->id].gain;
       }
 #endif
       if (filter_board == CHARLY25) {
@@ -599,7 +618,7 @@ if(analog_meter) {
         }
         cairo_stroke(cr);
 
-        cairo_set_font_size(cr, 10);
+        cairo_set_font_size(cr, DISPLAY_FONT_SIZE1);
         cairo_move_to(cr, offset+(double)(18*db)-3.0, (double)meter_height-1);
         cairo_show_text(cr, "3");
         cairo_move_to(cr, offset+(double)(36*db)-3.0, (double)meter_height-1);
@@ -664,16 +683,16 @@ if(analog_meter) {
         text_location=offset+(db*114)+5;
       }
 
-      cairo_set_font_size(cr, 12);
+      cairo_set_font_size(cr, DISPLAY_FONT_SIZE2);
       sprintf(sf,"%d dBm",(int)level);
       cairo_move_to(cr, text_location, meter_height-12);
       cairo_show_text(cr, sf);
       break;
     case POWER:
-      cairo_select_font_face(cr, "FreeMono",
+      cairo_select_font_face(cr, DISPLAY_FONT,
             CAIRO_FONT_SLANT_NORMAL,
             CAIRO_FONT_WEIGHT_BOLD);
-      cairo_set_font_size(cr, 12);
+      cairo_set_font_size(cr, DISPLAY_FONT_SIZE2);
 
       if(level>max_level || max_count==10) {
           max_level=level;
@@ -681,7 +700,7 @@ if(analog_meter) {
       }
       max_count++;
 
-      sprintf(sf,"FWD: %0.1f %s",max_level,units);
+      sprintf(sf,"FWD: %d%s",(int)max_level,units);
       cairo_move_to(cr, 10, 35);
       cairo_show_text(cr, sf);
 
@@ -691,10 +710,10 @@ if(analog_meter) {
       } else {
         swr=999.9;
       }
-      cairo_select_font_face(cr, "FreeMono",
+      cairo_select_font_face(cr, DISPLAY_FONT,
             CAIRO_FONT_SLANT_NORMAL,
             CAIRO_FONT_WEIGHT_BOLD);
-      cairo_set_font_size(cr, 12);
+      cairo_set_font_size(cr, DISPLAY_FONT_SIZE2);
       sprintf(sf,"SWR: %1.1f:1",swr);
       cairo_move_to(cr, 10, 55);
       cairo_show_text(cr, sf);

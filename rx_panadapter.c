@@ -38,6 +38,7 @@
 #include "rx_panadapter.h"
 #include "vfo.h"
 #include "mode.h"
+#include "actions.h"
 #ifdef GPIO
 #include "gpio.h"
 #endif
@@ -233,8 +234,8 @@ void rx_panadapter_update(RECEIVER *rx) {
 
   double dbm_per_line=(double)display_height/((double)rx->panadapter_high-(double)rx->panadapter_low);
   cairo_set_line_width(cr, LINE_WIDTH);
-  cairo_select_font_face(cr, "FreeMono", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
-  cairo_set_font_size(cr, 12);
+  cairo_select_font_face(cr, DISPLAY_FONT, CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
+  cairo_set_font_size(cr, DISPLAY_FONT_SIZE2);
   char v[32];
 
   for(i=rx->panadapter_high;i>=rx->panadapter_low;i--) {
@@ -365,10 +366,10 @@ void rx_panadapter_update(RECEIVER *rx) {
   }
 
   f = ((min_display/divisor)*divisor)+divisor;
-  cairo_select_font_face(cr, "FreeMono",
+  cairo_select_font_face(cr, DISPLAY_FONT,
                             CAIRO_FONT_SLANT_NORMAL,
                             CAIRO_FONT_WEIGHT_BOLD);
-  cairo_set_font_size(cr, 12);
+  cairo_set_font_size(cr, DISPLAY_FONT_SIZE2);
   while(f<max_display) {
     x=(double)(f-min_display)/HzPerPixel;
     cairo_move_to(cr,(double)x,0.0);
@@ -404,11 +405,11 @@ void rx_panadapter_update(RECEIVER *rx) {
             
 #ifdef CLIENT_SERVER
   if(clients!=NULL) {
-    cairo_select_font_face(cr, "FreeMono",
+    cairo_select_font_face(cr, DISPLAY_FONT,
               CAIRO_FONT_SLANT_NORMAL,
               CAIRO_FONT_WEIGHT_NORMAL);
     cairo_set_source_rgb (cr, 0.5, 0.5, 0.5);
-    cairo_set_font_size(cr, 22);
+    cairo_set_font_size(cr, DISPLAY_FONT_SIZE4);
     inet_ntop(AF_INET, &(((struct sockaddr_in *)&clients->address)->sin_addr),text,64);
     cairo_text_extents(cr, text, &extents);
     cairo_move_to(cr, ((double)display_width/2.0)-(extents.width/2.0), (double)display_height/2.0);
@@ -419,13 +420,13 @@ void rx_panadapter_update(RECEIVER *rx) {
 
   // agc
   if(rx->agc!=AGC_OFF) {
-    double knee_y=rx->agc_thresh+(double)adc_attenuation[rx->adc];
+    double knee_y=rx->agc_thresh+(double)adc[rx->adc].attenuation;
     if (filter_board == ALEX && rx->adc == 0) knee_y += (double)(10*rx->alex_attenuation);
     knee_y = floor((rx->panadapter_high - knee_y)
                         * (double) display_height
                         / (rx->panadapter_high - rx->panadapter_low));
 
-    double hang_y=rx->agc_hang+(double)adc_attenuation[rx->adc];
+    double hang_y=rx->agc_hang+(double)adc[rx->adc].attenuation;
     if (filter_board == ALEX && rx->adc == 0) hang_y += (double)(10*rx->alex_attenuation);
     hang_y = floor((rx->panadapter_high - hang_y)
                         * (double) display_height
@@ -487,9 +488,9 @@ void rx_panadapter_update(RECEIVER *rx) {
   samples[pan]=-200.0;
   samples[display_width-1+pan]=-200.0;
   if(have_rx_gain) {
-    s1=(double)samples[pan]+rx_gain_calibration-adc_attenuation[rx->adc];
+    s1=(double)samples[pan]+rx_gain_calibration-adc[rx->adc].attenuation;
   } else {
-    s1=(double)samples[pan]+(double)adc_attenuation[rx->adc];
+    s1=(double)samples[pan]+(double)adc[rx->adc].attenuation;
   }
   cairo_move_to(cr, 0.0, s1);
   if (filter_board == ALEX && rx->adc == 0) s1 += (double)(10*rx->alex_attenuation);
@@ -499,7 +500,8 @@ void rx_panadapter_update(RECEIVER *rx) {
   }
 #ifdef SOAPYSDR
   if(protocol==SOAPYSDR_PROTOCOL) {
-    s1-=rx->rf_gain;
+    //s1-=rx->rf_gain;
+    s1-=adc[rx->id].gain;
   }
 #endif
 
@@ -509,9 +511,9 @@ void rx_panadapter_update(RECEIVER *rx) {
   cairo_move_to(cr, 0.0, s1);
   for(i=1;i<display_width;i++) {
     if(have_rx_gain) {
-      s2=(double)samples[i+pan]+rx_gain_calibration-adc_attenuation[rx->adc];
+      s2=(double)samples[i+pan]+rx_gain_calibration-adc[rx->adc].attenuation;
     } else {
-      s2=(double)samples[i+pan]+(double)adc_attenuation[rx->adc];
+      s2=(double)samples[i+pan]+(double)adc[rx->adc].attenuation;
     }
     if (filter_board == ALEX && rx->adc == 0) s2 += (double)(10*rx->alex_attenuation);
     if (filter_board == CHARLY25) {
@@ -520,7 +522,8 @@ void rx_panadapter_update(RECEIVER *rx) {
     }
 #ifdef SOAPYSDR
     if(protocol==SOAPYSDR_PROTOCOL) {
-      s2-=rx->rf_gain;
+      //s2-=rx->rf_gain;
+      s2-=adc[rx->id].gain;
     }
 #endif
     s2 = floor((rx->panadapter_high - s2)
@@ -573,11 +576,12 @@ void rx_panadapter_update(RECEIVER *rx) {
     cairo_pattern_destroy(gradient);
   }
 
+/*
 #ifdef GPIO
   if(rx->id==0 && controller==CONTROLLER1) {
 
     cairo_set_source_rgb(cr,1.0,1.0,0.0);
-    cairo_set_font_size(cr,16);
+    cairo_set_font_size(cr, DISPLAY_FONT_SIZE3);
     if(ENABLE_E2_ENCODER) {
       cairo_move_to(cr, display_width-200,70);
       sprintf(text,"%s (%s)",encoder_string[e2_encoder_action],sw_string[e2_sw_action]);
@@ -597,12 +601,12 @@ void rx_panadapter_update(RECEIVER *rx) {
     }
   }
 #endif
-
+*/
   if(display_sequence_errors) {
     if(sequence_errors!=0) {
       cairo_move_to(cr,100.0,50.0);
       cairo_set_source_rgb(cr,1.0,0.0,0.0);
-      cairo_set_font_size(cr,12);
+      cairo_set_font_size(cr, DISPLAY_FONT_SIZE2);
       cairo_show_text(cr, "Sequence Error");
       sequence_error_count++;
       // show for 2 second
@@ -615,7 +619,7 @@ void rx_panadapter_update(RECEIVER *rx) {
 
   if(rx->id==0 && protocol==ORIGINAL_PROTOCOL && device==DEVICE_HERMES_LITE2) {
     cairo_set_source_rgb(cr,1.0,1.0,0.0);
-    cairo_set_font_size(cr,16);
+    cairo_set_font_size(cr, DISPLAY_FONT_SIZE3);
 
     double t = (3.26 * ((double)average_temperature / 4096.0) - 0.5) / 0.01;
     sprintf(text,"%0.1fC",t);

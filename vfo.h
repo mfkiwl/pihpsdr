@@ -44,6 +44,9 @@ struct _vfo {
   long long lo;
   long long offset;
 
+  gboolean entering_frequency;
+  gint64 entered_frequency;
+
 };
 
 extern struct _vfo vfo[MAX_VFOS];
@@ -68,10 +71,14 @@ typedef struct _set_frequency {
   long long frequency;
 } SET_FREQUENCY;
 
-extern int steps[];
+#define STEPS 15
 extern char *step_labels[];
 
 extern GtkWidget* vfo_init(int width,int height,GtkWidget *parent);
+extern int  vfo_get_stepindex();
+extern void vfo_set_step_from_index(int index);
+extern void vfo_set_stepsize(int newstep);
+extern int  vfo_get_step_from_index(int index);
 extern void vfo_step(int steps);
 extern void vfo_id_step(int id, int steps);
 extern void vfo_move(long long hz,int round);

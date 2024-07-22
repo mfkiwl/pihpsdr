@@ -53,6 +53,47 @@
 
 // The following calls functions can be called usig g_idle_add
 
+int ext_menu_filter(void *data) {
+  start_filter();
+  return 0;
+}
+
+int ext_menu_mode(void *data) {
+  start_mode();
+  return 0;
+}
+
+int ext_num_pad(void *data) {
+  gint val=GPOINTER_TO_INT(data);
+  RECEIVER *rx=active_receiver;
+  if(!vfo[rx->id].entering_frequency) {
+    vfo[rx->id].entered_frequency=0;
+    vfo[rx->id].entering_frequency=TRUE;
+  }
+  switch(val) {
+    case -1: // clear
+      vfo[rx->id].entered_frequency=0;
+      vfo[rx->id].entering_frequency=FALSE;
+      break;
+    case -2: // enter
+      if(vfo[rx->id].entered_frequency!=0) {
+        vfo[rx->id].frequency=vfo[rx->id].entered_frequency;
+	if(vfo[rx->id].ctun) {
+          vfo[rx->id].ctun=FALSE;
+          vfo[rx->id].offset=0;
+          vfo[rx->id].ctun_frequency=vfo[rx->id].frequency;
+	}
+      }
+      vfo[rx->id].entering_frequency=FALSE;
+      break;
+    default:
+      vfo[rx->id].entered_frequency=(vfo[rx->id].entered_frequency*10)+val;
+      break;
+  }
+  vfo_update(rx);
+  return 0;
+}
+
 int ext_vfo_mode_changed(void * data)
 {
   int mode=GPOINTER_TO_INT(data);
@@ -89,7 +130,6 @@ int ext_set_frequency(void *data) {
   // via the menu prior to changing the frequency
   //
   SET_FREQUENCY *set_frequency=(SET_FREQUENCY *)data;
-g_print("ext_set_frequency: vfo=%d freq=%lld\n",set_frequency->vfo,set_frequency->frequency);
   local_set_frequency(set_frequency->vfo,set_frequency->frequency);
   free(data);
   return 0;
@@ -108,7 +148,7 @@ static int vfo_timeout_cb(void * data) {
 // such that they can be filtered out if they come at high rate
 //
 int ext_vfo_update(void *data) {
-  if (vfo_timeout ==0) {
+  if (vfo_timeout==0) {
     vfo_timeout=g_timeout_add(100, vfo_timeout_cb, NULL);
   }
   return 0;
@@ -222,24 +262,11 @@ int ext_tx_set_ps(void *data) {
 
 int ext_update_vfo_step(void *data) {
   int direction=GPOINTER_TO_INT(data);
-  int i=0;
-  while(steps[i]!=step && steps[i]!=0) {
-    i++;
-  }
+  int i = vfo_get_stepindex();
 
-  if(steps[i]!=0) {
-    if(direction>0) {
-      i++;
-      if(steps[i]!=0) {
-        step=steps[i];
-      }
-    } else {
-      i--;
-      if(i>=0) {
-        step=steps[i];
-      }
-    }
-  }
+  direction > 0 ? i++ : i--;
+
+  vfo_set_step_from_index(i);
   g_idle_add(ext_vfo_update, NULL);
   return 0;
 }
@@ -262,6 +289,13 @@ int ext_vfo_id_step(void *data) {
 int ext_set_mic_gain(void * data) {
   double d=*(double *)data;
   set_mic_gain(d);
+  free(data);
+  return 0;
+}
+
+int ext_set_af_gain(void *data) {
+  double d=*(double *)data;
+  set_af_gain(active_receiver->id,d);
   free(data);
   return 0;
 }
@@ -418,6 +452,12 @@ void band_plus(int id) {
       found=1;
     }
   }
+}
+
+int ext_band_select(void *data) {
+  int b=GPOINTER_TO_INT(data);
+  vfo_band_changed(active_receiver->id,b);
+  return 0;
 }
 
 int ext_band_plus(void *data) {
@@ -762,7 +802,6 @@ int ext_remote_command(void *data) {
       AGC_COMMAND *agc_command=(AGC_COMMAND *)data;
       RECEIVER *rx=receiver[agc_command->id];
       rx->agc=ntohs(agc_command->agc);
-g_print("AGC_COMMAND: set_agc id=%d agc=%d\n",rx->id,rx->agc);
       set_agc(rx,rx->agc);
       send_agc(client->socket,rx->id,rx->agc);
       g_idle_add(ext_vfo_update, NULL);
@@ -775,6 +814,13 @@ g_print("AGC_COMMAND: set_agc id=%d agc=%d\n",rx->id,rx->agc);
       set_agc_gain(agc_gain_command->id,(double)temp);
       RECEIVER *rx=receiver[agc_gain_command->id];
       send_agc_gain(client->socket,rx->id,(int)rx->agc_gain,(int)rx->agc_hang,(int)rx->agc_thresh);
+      }
+      break;
+    case CMD_RESP_RX_GAIN:
+      {
+      RFGAIN_COMMAND *command=(RFGAIN_COMMAND *) data;
+      double td=ntohd(command->gain);
+      set_rf_gain(command->id, td);
       }
       break;
     case CMD_RESP_RX_ATTENUATION:
@@ -818,7 +864,6 @@ g_print("AGC_COMMAND: set_agc id=%d agc=%d\n",rx->id,rx->agc);
       BAND_COMMAND *band_command=(BAND_COMMAND *)data;
       RECEIVER *rx=receiver[band_command->id];
       short b=htons(band_command->band);
-g_print("BAND_COMMAND: id=%d band=%d\n",rx->id,b);
       vfo_band_changed(rx->id,b);
       send_vfo_data(client,VFO_A);
       send_vfo_data(client,VFO_B);
@@ -829,7 +874,6 @@ g_print("BAND_COMMAND: id=%d band=%d\n",rx->id,b);
       MODE_COMMAND *mode_command=(MODE_COMMAND *)data;
       RECEIVER *rx=receiver[mode_command->id];
       short m=htons(mode_command->mode);
-g_print("MODE_COMMAND: id=%d mode=%d\n",rx->id,m);
       vfo_mode_changed(m);
       send_vfo_data(client,VFO_A);
       send_vfo_data(client,VFO_B);
@@ -841,7 +885,6 @@ g_print("MODE_COMMAND: id=%d mode=%d\n",rx->id,m);
       FILTER_COMMAND *filter_command=(FILTER_COMMAND *)data;
       RECEIVER *rx=receiver[filter_command->id];
       short f=htons(filter_command->filter);
-g_print("FILTER_COMMAND: id=%d filter=%d\n",rx->id,f);
       vfo_filter_changed(f);
       send_vfo_data(client,VFO_A);
       send_vfo_data(client,VFO_B);
@@ -851,7 +894,6 @@ g_print("FILTER_COMMAND: id=%d filter=%d\n",rx->id,f);
     case CMD_RESP_SPLIT:
       {
       SPLIT_COMMAND *split_command=(SPLIT_COMMAND *)data;
-g_print("SPLIT_COMMAND: split=%d\n",split);
       if(can_transmit) {
         split=split_command->split;
         tx_set_mode(transmitter,get_tx_mode());
@@ -864,7 +906,6 @@ g_print("SPLIT_COMMAND: split=%d\n",split);
       {
       SAT_COMMAND *sat_command=(SAT_COMMAND *)data;
       sat_mode=sat_command->sat;
-g_print("SAT_COMMAND: sat_mode=%d\n",sat_mode);
       g_idle_add(ext_vfo_update, NULL);
       send_sat(client->socket,sat_mode);
       }
@@ -873,7 +914,6 @@ g_print("SAT_COMMAND: sat_mode=%d\n",sat_mode);
       {
       DUP_COMMAND *dup_command=(DUP_COMMAND *)data;
       duplex=dup_command->dup;
-g_print("DUP: duplex=%d\n",duplex);
       g_idle_add(ext_vfo_update, NULL);
       send_dup(client->socket,duplex);
       }
@@ -882,7 +922,6 @@ g_print("DUP: duplex=%d\n",duplex);
       {
       LOCK_COMMAND *lock_command=(LOCK_COMMAND *)data;
       locked=lock_command->lock;
-g_print("LOCK: locked=%d\n",locked);
       g_idle_add(ext_vfo_update, NULL);
       send_lock(client->socket,locked);
       }
@@ -890,7 +929,6 @@ g_print("LOCK: locked=%d\n",locked);
     case CMD_RESP_CTUN:
       {
       CTUN_COMMAND *ctun_command=(CTUN_COMMAND *)data;
-g_print("CTUN: vfo=%d ctun=%d\n",ctun_command->id,ctun_command->ctun);
       int v=ctun_command->id;
       vfo[v].ctun=ctun_command->ctun;
       if(!vfo[v].ctun) {
@@ -907,7 +945,6 @@ g_print("CTUN: vfo=%d ctun=%d\n",ctun_command->id,ctun_command->ctun);
       {
       FPS_COMMAND *fps_command=(FPS_COMMAND *)data;
       int rx=fps_command->id;
-g_print("FPS: rx=%d fps=%d\n",rx,fps_command->fps);
       receiver[rx]->fps=fps_command->fps;
       calculate_display_average(receiver[rx]);
       set_displaying(receiver[rx],1);
@@ -918,7 +955,6 @@ g_print("FPS: rx=%d fps=%d\n",rx,fps_command->fps);
       {
       RX_SELECT_COMMAND *rx_select_command=(RX_SELECT_COMMAND *)data;
       int rx=rx_select_command->id;
-g_print("RX_SELECT: rx=%d\n",rx);
       receiver_set_active(receiver[rx]);
       send_rx_select(client->socket,rx);
       }
@@ -927,7 +963,6 @@ g_print("RX_SELECT: rx=%d\n",rx);
       {
       VFO_COMMAND *vfo_command=(VFO_COMMAND *)data;
       int action=vfo_command->id;
-g_print("VFO: action=%d\n",action);
       switch(action) {
         case VFO_A_TO_B:
           vfo_a_to_b();
@@ -947,7 +982,6 @@ g_print("VFO: action=%d\n",action);
       {
       RIT_UPDATE_COMMAND *rit_update_command=(RIT_UPDATE_COMMAND *)data;
       int rx=rit_update_command->id;
-g_print("RIT_UPDATE: rx=%d\n",rx);
       vfo_rit_update(rx);
       send_vfo_data(client,rx);
       }
@@ -956,7 +990,6 @@ g_print("RIT_UPDATE: rx=%d\n",rx);
       {
       RIT_CLEAR_COMMAND *rit_clear_command=(RIT_CLEAR_COMMAND *)data;
       int rx=rit_clear_command->id;
-g_print("RIT_CLEAR: rx=%d\n",rx);
       vfo_rit_clear(rx);
       send_vfo_data(client,rx);
       }
@@ -966,7 +999,6 @@ g_print("RIT_CLEAR: rx=%d\n",rx);
       RIT_COMMAND *rit_command=(RIT_COMMAND *)data;
       int rx=rit_command->id;
       short rit=ntohs(rit_command->rit);
-g_print("RIT: rx=%d rit=%d\n",rx,(int)rit);
       vfo_rit(rx,(int)rit);
       send_vfo_data(client,rx);
       }
@@ -974,7 +1006,6 @@ g_print("RIT: rx=%d rit=%d\n",rx,(int)rit);
     case CMD_RESP_XIT_UPDATE:
       {
       XIT_UPDATE_COMMAND *xit_update_command=(XIT_UPDATE_COMMAND *)data;
-g_print("XIT_UPDATE\n");
       send_vfo_data(client,VFO_A);
       send_vfo_data(client,VFO_B);
       }
@@ -982,7 +1013,6 @@ g_print("XIT_UPDATE\n");
     case CMD_RESP_XIT_CLEAR:
       {
       XIT_CLEAR_COMMAND *xit_clear_command=(XIT_CLEAR_COMMAND *)data;
-g_print("XIT_CLEAR\n");
       send_vfo_data(client,VFO_A);
       send_vfo_data(client,VFO_B);
       }
@@ -991,7 +1021,6 @@ g_print("XIT_CLEAR\n");
       {
       XIT_COMMAND *xit_command=(XIT_COMMAND *)data;
       short xit=ntohs(xit_command->xit);
-g_print("XIT_CLEAR: xit=%d\n",xit);
       send_vfo_data(client,VFO_A);
       send_vfo_data(client,VFO_B);
       }
@@ -1001,7 +1030,6 @@ g_print("XIT_CLEAR: xit=%d\n",xit);
       SAMPLE_RATE_COMMAND *sample_rate_command=(SAMPLE_RATE_COMMAND *)data;
       int rx=(int)sample_rate_command->id;
       long long rate=ntohll(sample_rate_command->sample_rate);
-g_print("SAMPLE_RATE: rx=%d rate=%d\n",rx,(int)rate);
       if(rx==-1) {
         radio_change_sample_rate((int)rate);
         send_sample_rate(client->socket,-1,radio_sample_rate);
@@ -1015,7 +1043,6 @@ g_print("SAMPLE_RATE: rx=%d rate=%d\n",rx,(int)rate);
       {
       RECEIVERS_COMMAND *receivers_command=(RECEIVERS_COMMAND *)data;
       int r=receivers_command->receivers;
-g_print("RECEIVERS: receivers=%d\n",r);
       radio_change_receivers(r);
       send_receivers(client->socket,receivers);
       }
@@ -1024,7 +1051,6 @@ g_print("RECEIVERS: receivers=%d\n",r);
       {
       RIT_INCREMENT_COMMAND *rit_increment_command=(RIT_INCREMENT_COMMAND *)data;
       short increment=ntohs(rit_increment_command->increment);
-g_print("RIT_INCREMENT: increment=%d\n",increment);
       rit_increment=(int)increment;
       send_rit_increment(client->socket,rit_increment);
       }
@@ -1032,7 +1058,6 @@ g_print("RIT_INCREMENT: increment=%d\n",increment);
     case CMD_RESP_FILTER_BOARD:
       {
       FILTER_BOARD_COMMAND *filter_board_command=(FILTER_BOARD_COMMAND *)data;
-g_print("FILTER_BOARD: board=%d\n",(int)filter_board_command->filter_board);
       filter_board=(int)filter_board_command->filter_board;
       load_filters();
       send_filter_board(client->socket,filter_board);
@@ -1041,7 +1066,6 @@ g_print("FILTER_BOARD: board=%d\n",(int)filter_board_command->filter_board);
     case CMD_RESP_SWAP_IQ:
       {
       SWAP_IQ_COMMAND *swap_iq_command=(SWAP_IQ_COMMAND *)data;
-g_print("SWAP_IQ: board=%d\n",(int)swap_iq_command->iqswap);
       iqswap=(int)swap_iq_command->iqswap;
       send_swap_iq(client->socket,iqswap);
       }
@@ -1049,7 +1073,6 @@ g_print("SWAP_IQ: board=%d\n",(int)swap_iq_command->iqswap);
     case CMD_RESP_REGION:
       {
       REGION_COMMAND *region_command=(REGION_COMMAND *)data;
-g_print("REGION: region=%d\n",(int)region_command->region);
       iqswap=(int)region_command->region;
       send_region(client->socket,region);
       }
@@ -1118,14 +1141,12 @@ int ext_pan_set(void *data) {
 
 int ext_remote_set_zoom(void *data) {
   int zoom=GPOINTER_TO_INT(data);
-g_print("ext_remote_set_zoom: %d\n",zoom);
   remote_set_zoom(active_receiver->id,(double)zoom);
   return 0;
 }
 
 int ext_remote_set_pan(void *data) {
   int pan=GPOINTER_TO_INT(data);
-g_print("ext_remote_set_pan: %d\n",pan);
   remote_set_pan(active_receiver->id,(double)pan);
   return 0;
 }

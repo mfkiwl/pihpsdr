@@ -177,6 +177,7 @@
  **************************************************************************************************************
  */
 
+#include <gtk/gtk.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -191,7 +192,7 @@
 #include <time.h>
 #include <sys/mman.h>
 
-#ifdef GPIO
+#ifdef LOCALCW
 #include "gpio.h"
 #endif
 #include "radio.h"
@@ -235,14 +236,6 @@ static int cwvox = 0;
 extern int clock_nanosleep(clockid_t __clock_id, int __flags,
       __const struct timespec *__req,
       struct timespec *__rem);
-#endif
-
-#ifndef GPIO
-//
-// Dummy functions if compiled without GPIO
-//
-int gpio_cw_sidetone_enabled() { return 0; }
-void gpio_cw_sidetone_set(int level) {}
 #endif
 
 void keyer_update() {
@@ -295,6 +288,7 @@ void keyer_update() {
 static int enforce_cw_vox;
 
 void keyer_event(int left, int state) {
+  g_print("%s: running=%d left=%d state=%d\n",__FUNCTION__,running,left,state);
     if (!running) return;
     if (state) {
         // This is to remember whether the key stroke interrupts a running CAT CW 

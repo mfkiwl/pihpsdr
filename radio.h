@@ -26,6 +26,17 @@
 #include "receiver.h"
 #include "transmitter.h"
 
+//
+// Fonts and sizes for VFO, meter, panadapter etc.
+//
+#define DISPLAY_FONT "FreeSans"   // FreeMono in original piHPSDR
+#define DISPLAY_FONT_SIZE1 10     // sizes are as in original piHPSDR
+#define DISPLAY_FONT_SIZE2 12
+#define DISPLAY_FONT_SIZE3 16
+#define DISPLAY_FONT_SIZE4 22
+
+#define SLIDERS_FONT "FreeSans Bold 10"   // Used for description in the sliders/zoompan area
+
 #define NEW_MIC_IN 0x00
 #define NEW_LINE_IN 0x01
 #define NEW_MIC_BOOST 0x02
@@ -63,6 +74,8 @@ extern gboolean radio_is_remote;
 
 extern GtkWidget *fixed;
 
+extern long long calibration;
+
 extern char property_path[];
 
 #define NONE 0
@@ -78,22 +91,33 @@ extern char property_path[];
 
 extern int region;
 
-// specify how many receivers: for PURESIGNAL need two extra
-#define RECEIVERS 2
+extern int RECEIVERS;
+extern int MAX_RECEIVERS;
+extern int MAX_DDC;
 #ifdef PURESIGNAL
-#define MAX_RECEIVERS (RECEIVERS+2)
-#define PS_TX_FEEDBACK (RECEIVERS)
-#define PS_RX_FEEDBACK (RECEIVERS+1)
-#else
-#define MAX_RECEIVERS RECEIVERS
+extern int PS_TX_FEEDBACK;
+extern int PS_RX_FEEDBACK;
 #endif
-#define MAX_DDC (RECEIVERS+2)
+
+// specify how many receivers: for PURESIGNAL need two extra
+//#define RECEIVERS 2
+//#ifdef PURESIGNAL
+//#define MAX_RECEIVERS (RECEIVERS+2)
+//#define PS_TX_FEEDBACK (RECEIVERS)
+//#define PS_RX_FEEDBACK (RECEIVERS+1)
+//#else
+//#define MAX_RECEIVERS RECEIVERS
+//#endif
+//#define MAX_DDC (RECEIVERS+2)
 
 extern RECEIVER *receiver[];
 extern RECEIVER *active_receiver;
 
 extern TRANSMITTER *transmitter;
 
+#ifdef MIDI
+extern gboolean midi_enabled;
+#endif
 
 #define PA_DISABLED 0
 #define PA_ENABLED 1
@@ -180,7 +204,7 @@ extern int receivers;
 
 extern ADC adc[2];
 extern DAC dac[2];
-extern int adc_attenuation[2];
+//extern int adc_attenuation[2];
 
 extern int locked;
 
@@ -333,6 +357,8 @@ extern double getTuneDrive();
 extern void setTuneDrive(double d);
 extern void calcTuneDriveLevel();
 extern void setSquelch(RECEIVER *rx);
+
+extern void radio_set_rf_gain(RECEIVER *rx);
 
 extern void set_attenuation(int value);
 extern void set_alex_rx_antenna(int v);

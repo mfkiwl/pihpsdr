@@ -64,8 +64,8 @@ static int my_height;
 static GtkWidget *vfo_panel;
 static cairo_surface_t *vfo_surface = NULL;
 
-int steps[]={1,10,25,50,100,250,500,1000,5000,9000,10000,100000,250000,500000,1000000,0};
-char *step_labels[]={"1Hz","10Hz","25Hz","50Hz","100Hz","250Hz","500Hz","1kHz","5kHz","9kHz","10kHz","100kHz","250KHz","500KHz","1MHz",0};
+int steps[]={1,10,25,50,100,250,500,1000,5000,9000,10000,100000,250000,500000,1000000};
+char *step_labels[]={"1Hz","10Hz","25Hz","50Hz","100Hz","250Hz","500Hz","1kHz","5kHz","9kHz","10kHz","100kHz","250KHz","500KHz","1MHz"};
 
 static GtkWidget* menu=NULL;
 static GtkWidget* band_menu=NULL;
@@ -198,7 +198,6 @@ void vfo_restore_state() {
   char *value;
 
   for(i=0;i<MAX_VFOS;i++) {
-g_print("vfo_restore_state: %d\n",i);
 
     vfo[i].band=band20;
     vfo[i].bandstack=0;
@@ -218,7 +217,6 @@ g_print("vfo_restore_state: %d\n",i);
     vfo[i].rit=0;
     vfo[i].ctun=0;
 
-g_print("vfo_restore_state: band=%d frequency=%lld\n",vfo[i].band,vfo[i].frequency);
 
     sprintf(name,"vfo.%d.band",i);
     value=getProperty(name);
@@ -294,7 +292,7 @@ void vfo_band_changed(int id,int b) {
     vfo[id].bandstack=bandstack->current_entry;
   }
 
-  BAND *band=band_get_band(b);
+  BAND *band=band_set_current(b);
   BANDSTACK_ENTRY *entry=&bandstack->entry[vfo[id].bandstack];
   vfo[id].band=b;
   vfo[id].frequency=entry->frequency;
@@ -562,6 +560,59 @@ void vfo_a_swap_b() {
   g_idle_add(ext_vfo_update,NULL);
 }
 
+//
+// here we collect various functions to
+// get/set the VFO step size
+//
+
+int vfo_get_step_from_index(int index) {
+  //
+  // This function is used for some
+  // extended CAT commands
+  //
+  if (index < 0) index=0;
+  if (index >= STEPS) index=STEPS-1;
+  return steps[index];
+}
+
+int vfo_get_stepindex() {
+  //
+  // return index of current step size in steps[] array,
+  //
+  int i;
+  for(i=0;i<STEPS;i++) {
+    if(steps[i]==step) break;
+  }
+  //
+  // If step size is not found (this should not happen)
+  // report some "convenient" index at the small end
+  // (here: index 4 corresponding to 100 Hz)
+  //
+  if (i >= STEPS) i=4;
+  return i;
+}
+
+void vfo_set_step_from_index(int index) {
+  //
+  // Set VFO step size to steps[index], with range checking
+  //
+  if (index < 0)      index=0;
+  if (index >= STEPS) index = STEPS-1;
+  vfo_set_stepsize(steps[index]);
+}
+
+void vfo_set_stepsize(int newstep) {
+  //
+  // Set current VFO step size.
+  // and store the value in mode_settings of the current mode
+  //
+  int id=active_receiver->id;
+  int m=vfo[id].mode;
+
+  step=newstep;
+  //mode_settings[m].step=newstep;
+}
+
 void vfo_step(int steps) {
   int id=active_receiver->id;
   long long delta;
@@ -570,7 +621,6 @@ void vfo_step(int steps) {
 
 #ifdef CLIENT_SERVER
   if(radio_is_remote) {
-    //send_vfo_step(client_socket,id,steps);
     update_vfo_step(id,steps);
     return;
   }
@@ -911,14 +961,17 @@ void vfo_update() {
         cairo_set_source_rgb (cr, 0.0, 0.0, 0.0);
         cairo_paint (cr);
 
-        cairo_select_font_face(cr, "FreeMono",
+        cairo_select_font_face(cr, DISPLAY_FONT,
             CAIRO_FONT_SLANT_NORMAL,
             CAIRO_FONT_WEIGHT_BOLD);
 
         switch(vfo[id].mode) {
           case modeFMN:
+            //
+            // filter edges are +/- 5500 if deviation==2500,
+            //              and +/- 8000 if deviation==5000
             if(active_receiver->deviation==2500) {
-              sprintf(temp_text,"%s 8k",mode_string[vfo[id].mode]);
+              sprintf(temp_text,"%s 11k",mode_string[vfo[id].mode]);
             } else {
               sprintf(temp_text,"%s 16k",mode_string[vfo[id].mode]);
             }
@@ -937,7 +990,7 @@ void vfo_update() {
             sprintf(temp_text,"%s %s",mode_string[vfo[id].mode],band_filter->title);
             break;
         }
-        cairo_set_font_size(cr, 12);
+        cairo_set_font_size(cr, DISPLAY_FONT_SIZE2);
         cairo_set_source_rgb(cr, 1.0, 1.0, 0.0);
         cairo_move_to(cr, 5, 15);
         cairo_show_text(cr, temp_text);
@@ -953,21 +1006,30 @@ void vfo_update() {
         long long af = vfo[0].ctun ? vfo[0].ctun_frequency : vfo[0].frequency;
         long long bf = vfo[1].ctun ? vfo[1].ctun_frequency : vfo[1].frequency;
 
+	if(vfo[0].entering_frequency) {
+	    af=vfo[0].entered_frequency;
+	}
+	if(vfo[1].entering_frequency) {
+	    bf=vfo[1].entered_frequency;
+	}
         int oob=0;
         if (can_transmit) oob=transmitter->out_of_band;
+
         sprintf(temp_text,"VFO A: %0lld.%06lld",af/(long long)1000000,af%(long long)1000000);
         if(txvfo == 0 && (isTransmitting() || oob)) {
             if (oob) sprintf(temp_text,"VFO A: Out of band");
             cairo_set_source_rgb(cr, 1.0, 0.0, 0.0);
         } else {
-            if(id==0) {
+            if(vfo[0].entering_frequency) {
+              cairo_set_source_rgb(cr, 1.0, 1.0, 0.0);
+            } else if(id==0) {
               cairo_set_source_rgb(cr, 0.0, 1.0, 0.0);
             } else {
               cairo_set_source_rgb(cr, 0.0, 0.65, 0.0);
             }
         }
         cairo_move_to(cr, 5, 38);  
-        cairo_set_font_size(cr, 22); 
+        cairo_set_font_size(cr, DISPLAY_FONT_SIZE4); 
         cairo_show_text(cr, temp_text);
 
         sprintf(temp_text,"VFO B: %0lld.%06lld",bf/(long long)1000000,bf%(long long)1000000);
@@ -975,7 +1037,9 @@ void vfo_update() {
             if (oob) sprintf(temp_text,"VFO B: Out of band");
             cairo_set_source_rgb(cr, 1.0, 0.0, 0.0);
         } else {
-            if(id==1) {
+            if(vfo[1].entering_frequency) {
+              cairo_set_source_rgb(cr, 1.0, 1.0, 0.0);
+	    } else if(id==1) {
               cairo_set_source_rgb(cr, 0.0, 1.0, 0.0);
             } else {
               cairo_set_source_rgb(cr, 0.0, 0.65, 0.0);
@@ -992,7 +1056,7 @@ void vfo_update() {
           } else {
             cairo_set_source_rgb(cr, 0.7, 0.7, 0.7);
           }
-          cairo_set_font_size(cr, 12);
+          cairo_set_font_size(cr, DISPLAY_FONT_SIZE2);
           cairo_show_text(cr, "PS");
         }
 #endif
@@ -1003,7 +1067,7 @@ void vfo_update() {
         } else {
           cairo_set_source_rgb(cr, 0.7, 0.7, 0.7);
         }
-        cairo_set_font_size(cr, 12);
+        cairo_set_font_size(cr, DISPLAY_FONT_SIZE2);
         sprintf(temp_text,"Zoom x%d",active_receiver->zoom);
         cairo_show_text(cr, temp_text);
 
@@ -1014,7 +1078,7 @@ void vfo_update() {
         }
         sprintf(temp_text,"RIT: %lldHz",vfo[id].rit);
         cairo_move_to(cr, 170, 15);
-        cairo_set_font_size(cr, 12);
+        cairo_set_font_size(cr, DISPLAY_FONT_SIZE2);
         cairo_show_text(cr, temp_text);
 
 
@@ -1026,7 +1090,7 @@ void vfo_update() {
           }
           sprintf(temp_text,"XIT: %lldHz",transmitter->xit);
           cairo_move_to(cr, 310, 15);
-          cairo_set_font_size(cr, 12);
+          cairo_set_font_size(cr, DISPLAY_FONT_SIZE2);
           cairo_show_text(cr, temp_text);
         }
 
@@ -1105,16 +1169,16 @@ void vfo_update() {
         if(can_transmit) {
           cairo_move_to(cr, 330, 50);  
   	  if (transmitter->compressor) {
-  	      sprintf(temp_text,"CMPR %d dB",(int) transmitter->compressor_level);
-              cairo_set_source_rgb(cr, 1.0, 1.0, 0.0);
-              cairo_show_text(cr, temp_text);
+  	    sprintf(temp_text,"CMPR %ddB",(int) transmitter->compressor_level);
+            cairo_set_source_rgb(cr, 1.0, 1.0, 0.0);
+            cairo_show_text(cr, temp_text);
 	  } else {
-              cairo_set_source_rgb(cr, 0.7, 0.7, 0.7);
-              cairo_show_text(cr, "CMPR OFF");
+            cairo_set_source_rgb(cr, 0.7, 0.7, 0.7);
+            cairo_show_text(cr, "CMPR");
 	  }
         }
 
-        cairo_move_to(cr, 500, 50);  
+        cairo_move_to(cr, 505, 50);  
         if(diversity_enabled) {
           cairo_set_source_rgb(cr, 1.0, 1.0, 0.0);
         } else {
@@ -1122,16 +1186,18 @@ void vfo_update() {
         }
         cairo_show_text(cr, "DIV");
 
-        int s=0;
-        while(steps[s]!=step && steps[s]!=0) {
-          s++;
+	int s;
+	for(s=0;s<STEPS;s++) {
+          if(steps[s]==step) break;
         }
+	if(s>=STEPS) s=0;
+
         sprintf(temp_text,"Step %s",step_labels[s]);
         cairo_move_to(cr, 400, 15);
         cairo_set_source_rgb(cr, 1.0, 1.0, 0.0);
         cairo_show_text(cr, temp_text);
 
-        cairo_move_to(cr, 430, 50);  
+        cairo_move_to(cr, 405, 50);  
         if(vfo[id].ctun) {
           cairo_set_source_rgb(cr, 1.0, 1.0, 0.0);
         } else {
@@ -1139,7 +1205,17 @@ void vfo_update() {
         }
         cairo_show_text(cr, "CTUN");
 
-        cairo_move_to(cr, 470, 50);  
+#ifdef MIDI
+        cairo_move_to(cr, 445, 50);  
+        if(midi_enabled) {
+          cairo_set_source_rgb(cr, 1.0, 1.0, 0.0);
+        } else {
+          cairo_set_source_rgb(cr, 0.7, 0.7, 0.7);
+        }
+        cairo_show_text(cr, "MIDI");
+#endif
+
+        cairo_move_to(cr, 475, 50);  
         if(cat_control>0) {
           cairo_set_source_rgb(cr, 1.0, 1.0, 0.0);
         } else {
@@ -1148,7 +1224,7 @@ void vfo_update() {
         cairo_show_text(cr, "CAT");
 
         if(can_transmit) {
-          cairo_move_to(cr, 500, 15);  
+          cairo_move_to(cr, 505, 15);  
           if(vox_enabled) {
             cairo_set_source_rgb(cr, 1.0, 0.0, 0.0);
           } else {
@@ -1171,7 +1247,7 @@ void vfo_update() {
         } else {
           cairo_set_source_rgb(cr, 0.7, 0.7, 0.7);
         }
-        cairo_show_text(cr, "Split");
+        cairo_show_text(cr, "SPLIT");
 
         cairo_move_to(cr, 260, 28);
         if(sat_mode!=SAT_NONE) {
@@ -1193,25 +1269,15 @@ void vfo_update() {
         }
         sprintf(temp_text,"DUP");
         cairo_move_to(cr, 260, 38);
-        cairo_set_font_size(cr, 12);
+        cairo_set_font_size(cr, DISPLAY_FONT_SIZE2);
         cairo_show_text(cr, temp_text);
 
         cairo_destroy (cr);
         gtk_widget_queue_draw (vfo_panel);
     } else {
-fprintf(stderr,"vfo_update: no surface!\n");
+fprintf(stderr,"%s: no surface!\n",__FUNCTION__);
     }
 }
-
-/*
-static gboolean
-vfo_step_select_cb (GtkWidget *widget,
-               gpointer        data)
-{
-  step=steps[(int)data];
-  g_idle_add(ext_vfo_update,NULL);
-}
-*/
 
 static gboolean
 vfo_press_event_cb (GtkWidget *widget,
@@ -1223,8 +1289,6 @@ vfo_press_event_cb (GtkWidget *widget,
 }
 
 GtkWidget* vfo_init(int width,int height,GtkWidget *parent) {
-
-fprintf(stderr,"vfo_init: width=%d height=%d\n", width, height);
 
   parent_window=parent;
   my_width=width;
@@ -1289,6 +1353,7 @@ void vfo_rit_update(int rx) {
 
 void vfo_rit_clear(int rx) {
   vfo[receiver[rx]->id].rit=0;
+  vfo[receiver[rx]->id].rit_enabled=0;
   receiver_frequency_changed(receiver[rx]);
   g_idle_add(ext_vfo_update, NULL);
 }
@@ -1301,7 +1366,8 @@ void vfo_rit(int rx,int i) {
   } else if(value>10000.0) {
     value=10000.0;
   }
-  vfo[receiver[rx]->id].rit=(int)value;
+  vfo[receiver[rx]->id].rit=value;
+  vfo[receiver[rx]->id].rit_enabled=(value!=0);
   receiver_frequency_changed(receiver[rx]);
   g_idle_add(ext_vfo_update,NULL);
 }
